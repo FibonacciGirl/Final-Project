@@ -8,8 +8,15 @@ test.data<-
   
   #latent class stuff#
 
+##data##
+  
+Y<-array(n,n.dimensions)
+ybar<-numeric(n.categories)
 
-
+  
+for(j in 1:n.categories){
+  ybar[j]<-mean(Y[,,j])
+}
 
 ##MCMC setup##
 nrun=10000
@@ -17,7 +24,6 @@ thin=
 burn=
   
   
-Y<-array(n,n.dimensions)
 
 Z<-array(dim=c(nrun,n.categories))
 Mu<-array(dim=c(nrun,n.categories,n.dimensions))
@@ -43,28 +49,32 @@ category.probability<-matrix(ncol=n.categries,nrow=n.run)
 Z.jump<-array(dim=c(n,n.categories))
 
     for(s in 1:n){
-      Y<-c()
+      X<-numeric(n.categories)
       for(i in 1:n.categories){
-        Y[i]<-rgamma(1,alpha[(iter-1),i])
+        X[i]<-rgamma(1,alpha[(iter-1),i])
       }
-      Y.sum<-sum(Y)
+      X.sum<-sum(X)
       P<-numeric(n.categories)
       for(i in 1:n.categories){
-        P[i]<-Y[i]/Y.sum
+        P[i]<-X[i]/X.sum
       }
       ?rmultinom
       Z.jump[s,]<-rmultinom(1,1,prob=P)
     }
-loglik.current<-numeric(n.categories)
-loglik.jump<-numeric(n.categories)
+loglik.current<-numeric(n)
+loglik.jump<-numeric(n)
+prior.current<-numeric(n)
+prior.jump<-numeric(n)
 for(s in 1:n){
   j.jump<-which(Z.jump[s,]==1)
   j.current<-which(Z[(iter-1),s,]==1)
-  loglik.current[s]->log(dmvnorm(Y[s,],Mu[iter,j.current,],Sigma[iter,j.current,,]))
-  loglik.jump[s]->(dmvnorm(Y[s,],Mu[iter,j.jump],Sigma[iter,j.jump,,]))
+  loglik.current[s]<-log(dmvnorm(Y[s,],Mu[iter,j.current,],Sigma[iter,j.current,,]))
+  loglik.jump[s]<-log(dmvnorm(Y[s,],Mu[iter,j.jump],Sigma[iter,j.jump,,]))
+  prior.current[s]<-log(dmultinom(Z[(iter-1),s,],1,alpha[(iter-1),]))
+  prior.jump[s]<-log(dmultinom(Z.jump[s,]),1,alpha[(iter-1),])
 }
 
-accept.prob<- min(1, exp(sum(loglik.jump))/exp(sum(loglik.current)))
+accept.prob<- min(1, exp(sum(loglik.jump+prior.jump))/exp(sum(loglik.current+prior.current)))
 accept<-rbinom(1,1,accept.prob)
 if(accept == 1){
   Z[iter,,]<-Z.jump
@@ -73,11 +83,14 @@ if(accept==0){
   Z[iter,,]<-Z[(iter-1),,]
 }
 
-alpha[s,]<-alpha.z[(iter-1),s,]+sum(Z[iter,s,])
+Z.sum<-numeric(n.categories)
 
-for(j in 1:m){
-  ybar[j]<-mean(Y[,,j])
+for(j in 1:n.categories){
+  Z.sum[j]<-sum(Z[iter,,j])
 }
+
+alpha[iter,]<-alpha[(iter-1),]+Z.sum
+
 
 for(j in 1:m){
   Lambdan<-solve(solve(Lambda0)+n*solve(Sigma[(s-1),j,,]))
