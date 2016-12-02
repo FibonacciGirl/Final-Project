@@ -53,13 +53,7 @@ similarity.weights<-function(td,stim){
       weights[e,d]<-weights[e,d]/total
     }
   }  
-  #normalize so the sum of the dimension weights in a particular exemplar eqauls 1
-  for(e in 1:n.exemplars){
-    total<-sum(weights[e,])
-    for(d in 1:n.dimensions){
-      normal.weights[e,d]<-weights[e,d]/total
-    }
-  }
+
   print(sum(normal.weights))
   return(cbind(normal.weights,index))
 }
@@ -89,7 +83,7 @@ probability<-function(td,stim,cat){
     for(e in 1:n.exemplars){
       if(category[e] == c){  
         for(d in 1:n.dimensions){
-        dim<-c(dim,sqrt(w[which(w[,n.dimensions+d]==e),]*(exemplars[e,d]-stim[d])^2))
+        dim<-c(dim,sqrt(w[which(w[,n.dimensions+d]==e),d]*(exemplars[e,d]-stim[d])^2))
         #select proper weight by the index stored by weighting function
         }
         distance[e]<-sum(sapply(dim,similarity))  
