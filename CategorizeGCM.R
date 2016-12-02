@@ -7,7 +7,6 @@ GCM<-function(td){
   n.categories<-length(unique(category))
   n.dimensions<-dim(exemplars)[2]
   n.exemplars<-dim(exemplars)[1]
-  print(n.exemplars)
   category.guess<-numeric(n.exemplars)
   for(e in 3:n.exemplars){
     td<-exemplars[(1:(e-1)),]
@@ -23,4 +22,7 @@ GCM<-function(td){
   return(td)
 }
 
+training.data<-read.csv('TD')
+
 GCM(training.data)
+
