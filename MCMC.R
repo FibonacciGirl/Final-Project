@@ -7,29 +7,7 @@ test.data<-
 
   
   #latent class stuff#
-Z<-array(dim=c(n.run,n,n.categories))
-alpha.z<-array(dim=c(n.run,n,n.categories))
 
-mu<-matrix(ncol=n.dimensions,nrow=n.run)
-Sigma<-array(dim=c(n.dimensions,n.dimensions,n.run))
-
-category.probability<-matrix(ncol=n.categries,nrow=n.run)
-
-for(iter in 1:n.run){
-  for(s in 1:n){
-    Y<-c()
-    for(i in 1:n.categories){
-      Y[i]<-rgamma(1,alpha[(iter-1),i])
-    }
-    Y.sum<-sum(Y)
-    P<-numeric(n.categories)
-    for(i in 1:n.categories){
-      P[i]<-Y[i]/Y.sum
-    }
-  Z[iter,s,]<-rmultinom(1,n.categories,P)
-  alpha[iter,s,]<-alpha.z((iter-1),s,)+sum(Z[iter,s,])}
-  }
-}
 
 
 
@@ -38,7 +16,8 @@ nrun=10000
 thin=
 burn=
   
-Y<-#data
+  
+Y<-array(n,n.dimensions)
 
 Z<-array(dim=c(nrun,n.categories))
 Mu<-array(dim=c(nrun,n.categories,n.dimensions))
@@ -51,6 +30,50 @@ nu0<-array(dim=c(n.categories,n.dimensions))
 Sigma0<-array(dim=c(n.categories,n.dimensions))
 
 alpha<-array(dim=c(n.categories))  
+
+
+##latent class##
+Z<-array(dim=c(nrun,n,n.categories))
+
+alpha.z<-array(dim=c(n.run,n.categories))
+
+
+category.probability<-matrix(ncol=n.categries,nrow=n.run)
+
+Z.jump<-array(dim=c(n,n.categories))
+
+    for(s in 1:n){
+      Y<-c()
+      for(i in 1:n.categories){
+        Y[i]<-rgamma(1,alpha[(iter-1),i])
+      }
+      Y.sum<-sum(Y)
+      P<-numeric(n.categories)
+      for(i in 1:n.categories){
+        P[i]<-Y[i]/Y.sum
+      }
+      ?rmultinom
+      Z.jump[s,]<-rmultinom(1,1,prob=P)
+    }
+loglik.current<-numeric(n.categories)
+loglik.jump<-numeric(n.categories)
+for(s in 1:n){
+  j.jump<-which(Z.jump[s,]==1)
+  j.current<-which(Z[(iter-1),s,]==1)
+  loglik.current[s]->log(dmvnorm(Y[s,],Mu[iter,j.current,],Sigma[iter,j.current,,]))
+  loglik.jump[s]->(dmvnorm(Y[s,],Mu[iter,j.jump],Sigma[iter,j.jump,,]))
+}
+
+accept.prob<- min(1, exp(sum(loglik.jump))/exp(sum(loglik.current)))
+accept<-rbinom(1,1,accept.prob)
+if(accept == 1){
+  Z[iter,,]<-Z.jump
+}
+if(accept==0){
+  Z[iter,,]<-Z[(iter-1),,]
+}
+
+alpha[s,]<-alpha.z[(iter-1),s,]+sum(Z[iter,s,])
 
 for(j in 1:m){
   ybar[j]<-mean(Y[,,j])
@@ -72,7 +95,10 @@ for(j in 1:n.categories){
   p<-matrix(nrow=n.dimensions,ncol=n.dimensions)
   for(d in 1:n.dimensions){
     p[d,]<-rgamma(n.dimensions,alpha[(s-1),d,])
-    for(i in 1:n.dimensions){
+    for(i in 1:n.dimensions){                                                                                        
+
+      
+##weight matrix stuff##
       A[s,j,d,i]<-p[d,i]/sum(p[d,])
     }
 
