@@ -18,6 +18,8 @@ Posdef <- function (n, ev = runif(n, 0, 1))
   H <- t(O) %*% diag(ev) %*% O
   return(H)
 }  
+
+Posdef(2)
 ######################
 
 n.categories<-4 # run the loop this many times to get prob for each category

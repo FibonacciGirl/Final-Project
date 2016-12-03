@@ -1,0 +1,37 @@
+##jags model##
+
+model{
+  mu0= matrix(c(.5,.5),nrow=2,ncol=1)
+  L0= matrix(c(0.4328403, 0.0406657, 0.0406657, 0.4222715),nrow=2,ncol=2)
+  nu0= 4
+  S0= Sigma0
+  
+  for(j in 1: n.categories){
+    alpha_j[j]~dbeta(1,1)
+  }
+  for(k in 1:n.categories){
+    alpha_k[k]~dbeta(1,1)
+  }
+  
+  theta~ddrich[alpha_j[1:j]]
+  
+  for(i in 1:n){
+    Z[i]~dcat[theta]
+    for(j in 1:n.categories){
+      if(Z[i]==j){  
+      Y[i]~dmnorm(W[j]%*%mu[j],W[j]%*%sigma[j]%*%t(W[j]))
+      }
+    }
+  }
+  
+  for(j in 1:n.categories){
+    mu[j]~dmnorm(mu0,L0)
+    sigma.inv[j] ~ dwish(nu0,S0)
+    sigma[j] = slove(sigma.inv[j])
+  
+    for(k in 1:n.dimensions){
+      w[j,k]~ddirch[alpha_k[k]]
+    }
+    W[j] = matrix(w[j,],nrow=n.dimensions,ncol=n.dimensions)
+  }
+}
