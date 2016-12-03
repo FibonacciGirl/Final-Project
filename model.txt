@@ -5,28 +5,24 @@ model{
   for(j in 1:m){
     alpha_j[j]~dbeta(1,1)
   }
-  for(k in 1:p){
-    alpha_k[k]~dbeta(1,1)
-  }
-  
   for(j in 1:m){
     mu[j,1:p]~dmnorm(mu0,L0)
-    sigma[j,1:p,1:p] ~ dwish(S0,m)
+    sigma[j,1:p,1:p] ~ dwish(S0,p)
   }
   for(j in 1:m){
-    for(k in 1:p){
-      W[j,k,1:p] ~ ddirch(alpha_k[1:p])
-    }
+    W[j,1:p,1:p] ~dwish(W0,p)
   }
   
   theta~ddirch(alpha_j[1:m])
   
   for(i in 1:n){
     Z[i]~dcat(theta)
-    for(j in 1:m){
-      Y[i,1:p]~ifelse(Z[i]==j,dmnorm(mu[j,1:p],sigma[j,1:p,1:p]))
-      E[i,1:p]~Y[i,1:p]%*%W[j,1:p,1:p]    
-    }
-  }
   
+  }
+  for(i in 1:n){
+    z<-Z[i]
+    Y[1:p,i] ~ dmnorm(mu[z,1:p],sigma[z,1:p,1:p])
+    E[1:p,i]<- Y[1:p,i]%*%W[z,1:p,1:p]  
+  }
+
 }
