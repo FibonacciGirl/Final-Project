@@ -10,26 +10,22 @@ model{
   }
   
   for(j in 1:m){
-    mu[j]~dmnorm(mu0,L0)
-    sigma.inv[j] ~ dwish(nu0,S0)
-    sigma[j] <- inverse(sigma.inv[j])
-  
+    mu[j,1:p]~dmnorm(mu0,L0)
+    sigma[j,1:p,1:p] ~ dwish(S0,m)
+  }
+  for(j in 1:m){
     for(k in 1:p){
-      w[k] ~ ddirch(alpha_k[k])
-    }
-    for(k in 1:p){
-    W[j,k] <- w[k]
+      W[j,k,1:p] ~ ddirch(alpha_k[1:p])
     }
   }
   
-  theta~ddirch(alpha_j[1:j])
+  theta~ddirch(alpha_j[1:m])
   
   for(i in 1:n){
     Z[i]~dcat(theta)
-  }
-  for(i in 1:n){
     for(j in 1:m){
-      Y[i]~ifelse(Z[i]==j,dmnorm(W[j,]%*%mu[j],W[j,]%*%sigma[j]%*%t(W[j,])))
+      Y[i,1:p]~ifelse(Z[i]==j,dmnorm(mu[j,1:p],sigma[j,1:p,1:p]))
+      E[i,1:p]~Y[i,1:p]%*%W[j,1:p,1:p]    
     }
   }
   
