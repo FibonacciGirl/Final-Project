@@ -8,21 +8,17 @@ model{
   for(j in 1:m){
     mu[j,1:p]~dmnorm(mu0,L0)
     sigma[j,1:p,1:p] ~ dwish(S0,p)
-  }
-  for(j in 1:m){
-    W[j,1:p,1:p] ~dwish(W0,p)
+    W[j,1:p,1:p] ~ dwish(W0,p)
+    
+    mean[j,1:p]<- W[j,1:p,1:p]%*%mu[j,1:p]
+    sd[j,1:p,1:p]<- W[j,1:p,1:p]%*%sigma[j,1:p,1:p]%*%t(W[j,1:p,1:p])
   }
   
   theta~ddirch(alpha_j[1:m])
   
   for(i in 1:n){
     Z[i]~dcat(theta)
-  
-  }
-  for(i in 1:n){
-    z<-Z[i]
-    Y[1:p,i] ~ dmnorm(mu[z,1:p],sigma[z,1:p,1:p])
-    E[1:p,i]<- Y[1:p,i]%*%W[z,1:p,1:p]  
+    E[1:p,i] ~ dmnorm(mean[Z[i],1:p],sd[Z[i],1:p,1:p])
   }
 
 }
