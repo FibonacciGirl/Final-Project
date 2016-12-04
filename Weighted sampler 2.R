@@ -6,7 +6,6 @@ library(Matrix)
 library(mvtnorm)
 library(MCMCpack)
 library(coda)
-set.seed(100)
 
 
 ##credit Ravi Varadhan rvaradhan at jhmi.edu ####
@@ -31,10 +30,52 @@ Posdef(2)
 
 #latent class stuff#
 
-MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha,W0){
-  n.categories<-2
+MCMC<-function(Y){
+  
+  n.categories<-length(unique(category))
   n<-dim(Y)[2]
   n.dimensions<-dim(Y)[1]
+  
+  ybar<-array(dim= c(n.categories,n.dimensions))
+  nj<-numeric()
+  
+  for(j in 1:n.categories){
+    ybar[j,]<-mean(Y[,which(category==j)])
+    nj[j]<-length(Y[,which(category==j)])
+  }
+
+  
+  ##MCMC setup##
+  nrun =10000
+  burn = 5000
+  thin = 10
+  eff.sam = (nrun-burn)/thin
+  
+  Theta.out<-array(dim=c(eff.sam,n.categories))
+  Sigma.out<-array(dim=c(eff.sam,n.categories,n.dimensions,n.dimensions))
+  Mu.out<-array(dim=c(eff.sam,n.categories,n.dimensions))
+  Z.out<-array(dim=c(eff.sam,n,n.categories))
+  W.out<-array(dim=c(eff.sam,n.categories,n.dimensions,n.dimensions))
+  
+  
+  #choose fixed hyper paratments#
+  mu0<-array(rep(0,n.dimensions*n.categories),dim=c(n.categories,n.dimensions))
+  Lambda0<-array(dim=c(n.categories,n.dimensions,n.dimensions))
+  for(j in 1:n.categories){
+    Lambda0[j,,]<-rWishart(1,n.dimensions,diag(1,n.dimensions,n.dimensions))
+  }
+  Lambda0[1,,]
+  
+  
+  nu0<-rep(n.dimensions,n.categories)
+  sigma0<-rWishart(1,n.dimensions,diag(100,n.dimensions,n.dimensions))
+  sigma0<-solve(matrix(sigma0,nrow=n.dimensions,ncol=n.dimensions))
+  
+  W0<-array(dim=c(n.categories,n.dimensions,n.dimensions))
+  for(j in 1:n.categories){
+    W0[j,,]<-rWishart(1,n.dimensions,diag(1,n.dimensions,n.dimensions))
+  }
+  alpha<-rep(1,n.categories)
   
   ##set initial values##
   Z<-array(dim=c(nrun,n,n.categories))
@@ -53,19 +94,6 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha,W0){
     Sigma.inv<-rWishart(1,n.dimensions,sigma0)
     Sigma[1,j,,]<-solve(matrix(Sigma.inv,nrow=n.dimensions,ncol=n.dimensions))
   }
-
-  
-  ##MCMC setup##
-  nrun =10000
-  burn = 5000
-  thin = 10
-  eff.sam = (nrun-burn)/thin
-  
-  Theta.out<-array(dim=c(eff.sam,n.categories))
-  Sigma.out<-array(dim=c(eff.sam,n.categories,n.dimensions,n.dimensions))
-  Mu.out<-array(dim=c(eff.sam,n.categories,n.dimensions))
-  Z.out<-array(dim=c(eff.sam,n,n.categories))
-  W.out<-array(dim=c(eff.sam,n.categories,n.dimensions,n.dimensions))
   
   ##begin sampler##
   for(iter in 2:nrun){
@@ -74,11 +102,8 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha,W0){
     wit<-array(dim=c(n.categories,n.dimensions*n.dimensions))
     for(j in 1:n.categories){
     wit[j,]<-as.vector(nearPD(W[(iter-1),j,,])$mat) 
-    print(wit[j,])
     witer[j,,]<-matrix(wit[j,],nrow=n.dimensions,ncol=n.dimensions)
-    dim(witer)
     }
-    print(witer)
     ##update Z and W##
     
     Z.jump<-array(dim=c(n,n.categories))
@@ -159,9 +184,12 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha,W0){
     ##update theta##
     Z.sum<-numeric(n.categories)
     alpha_n<-numeric(n.categories)
-    
+    z.j<-numeric(n)
+    for(s in 1:n){
+    z.j[s]<-which(Z[(iter-1),s,]==1)
+    }
     for(j in 1:n.categories){
-      Z.sum[j]<-sum(Z[(iter-1),,j])
+      Z.sum[j]<-length(which(z.j==j))
       alpha_n[j]<-alpha[j] +Z.sum[j]
     }
     theta[iter,]<-rdirichlet(1,alpha_n)
@@ -186,7 +214,7 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha,W0){
     
     
     nun<-n.dimensions + n
-    
+    Sw<-array(dim=c(n.categories,n.dimensions,n.dimensions))
   for(j in 1:n.categories){
     sum.sig<-array(sigma0,dim=c(n.dimensions,n.dimensions))
     for(i in 1:n){
@@ -200,9 +228,11 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha,W0){
 
 
       sig.inv<-rWishart(1,nun,Sw[j,,])
+      print(sig.inv)
       Sigma[iter,j,,]<-solve(matrix(sig.inv,nrow=n.dimensions,ncol=n.dimensions))
 
-    }
+  }
+    print(Sigma[iter,,,])
 
     #print('################   Sigma updated   ################')
     
@@ -224,16 +254,15 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha,W0){
 
 
 ##data##
-data<-read.csv('TD',header=TRUE)
-?read.csv
+data<-read.csv('TD10',header=TRUE)
 category<-data$category
 data$category<-NULL
 x<-data$x
 y<-data$y
-n.categories<-length(unique(category))
+
 Y<-t(cbind(as.matrix(x),as.matrix(y)))
 
-
+n.categories<-length(unique(category))
 n<-dim(Y)[2]
 n.dimensions<-dim(Y)[1]
 
@@ -244,26 +273,9 @@ for(j in 1:n.categories){
   ybar[j,]<-mean(Y[,which(category==j)])
   nj[j]<-length(Y[,which(category==j)])
 }
-#choose fixed hyper paratments#
-mu0<-array(rep(0,n.dimensions*n.categories),dim=c(n.categories,n.dimensions))
-Lambda0<-array(dim=c(n.categories,n.dimensions,n.dimensions))
-for(j in 1:n.categories){
-  Lambda0[j,,]<-rWishart(1,n.dimensions,diag(1,n.dimensions,n.dimensions))
-}
-Lambda0[1,,]
 
 
-nu0<-rep(n.dimensions,n.categories)
-sigma0<-rWishart(1,n.dimensions,diag(100,n.dimensions,n.dimensions))
-sigma0<-solve(matrix(sigma0,nrow=n.dimensions,ncol=n.dimensions))
-
-W0<-array(dim=c(n.categories,n.dimensions,n.dimensions))
-for(j in 1:n.categories){
-  W0[j,,]<-rWishart(1,n.dimensions,diag(1,n.dimensions,n.dimensions))
-}
-alpha<-rep(1,n.categories)
-
-test<- MCMC(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha,W0)
+test<- MCMC(Y)
 
 
 th<-test[[1]]
