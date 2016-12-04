@@ -6,6 +6,7 @@ library(Matrix)
 library(mvtnorm)
 library(MCMCpack)
 library(coda)
+set.seed(100)
 
 
 ##credit Ravi Varadhan rvaradhan at jhmi.edu ####
@@ -70,10 +71,14 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha,W0){
   for(iter in 2:nrun){
     print(iter)
     witer<-array(dim=c(n.categories,n.dimensions,n.dimensions))
+    wit<-array(dim=c(n.categories,n.dimensions*n.dimensions))
     for(j in 1:n.categories){
-    wit<-as.vector(nearPD(W[(iter-1),j,,])$mat)  
-    witer[j,,]<-matrix(wit,nrow=n.dimensions,ncol=n.dimensions)
+    wit[j,]<-as.vector(nearPD(W[(iter-1),j,,])$mat) 
+    print(wit[j,])
+    witer[j,,]<-matrix(wit[j,],nrow=n.dimensions,ncol=n.dimensions)
+    dim(witer)
     }
+    print(witer)
     ##update Z and W##
     
     Z.jump<-array(dim=c(n,n.categories))
@@ -99,19 +104,24 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha,W0){
     for(s in 1:n){
       j.z.jump<-which(Z.jump[s,]==1)
       j.z.current<-which(Z[(iter-1),s,]==1)
-
-      loglik.z.current<-loglik.z.current + log(dmvnorm(Y[,s],witer[j.z.current,,]%*%Mu[(iter-1),j.z.current,],witer[j.z.current,,]%*%Sigma[(iter-1),j.z.current,,]%*%t(witer[j.z.current,,])))
-      loglik.z.jump<-loglik.z.jump+log(dmvnorm(Y[,s],witer[j.z.jump,,]%*%Mu[(iter-1),j.z.jump,],witer[j.z.jump,,]%*%Sigma[(iter-1),j.z.jump,,]%*%t(witer[j.z.jump,,])))
+      WW.c<-as.vector(nearPD(witer[j.z.current,,]%*%Sigma[(iter-1),j.z.current,,]%*%t(witer[j.z.current,,]))$mat)
+      WW.c<-matrix(WW.c,nrow= n.dimensions,ncol=n.dimensions)
+      WW.j<-as.vector(nearPD(witer[j.z.jump,,]%*%Sigma[(iter-1),j.z.jump,,]%*%t(witer[j.z.jump,,]))$mat)
+      WW.j<-matrix(WW.j,nrow= n.dimensions,ncol=n.dimensions)         
+                                                               
+      loglik.z.current<-loglik.z.current + log(dmvnorm(Y[,s],witer[j.z.current,,]%*%Mu[(iter-1),j.z.current,],WW.c))
+      loglik.z.jump<-loglik.z.jump+log(dmvnorm(Y[,s],witer[j.z.jump,,]%*%Mu[(iter-1),j.z.jump,],WW.j))
       prior.z.current<-prior.z.current+log(dmultinom(Z[(iter-1),s,],1,theta[(iter-1),]))
       prior.z.jump<-prior.z.jump+log(dmultinom(Z.jump[s,],1,theta[(iter-1),]))
         
-      j.w.jump<-which(Z[(iter-1),s,]==1)
-      j.w.current<-which(Z[(iter-1),s,]==1)
+  
       ##get rid of repeat
-      loglik.w.current<-loglik.w.current+log(dmvnorm(Y[,s],witer[j.w.current,,]%*%Mu[(iter-1),j.w.current,],witer[j.w.current,,]%*%Sigma[(iter-1),j.w.current,,]%*%t(witer[j.w.current,,])))
-      loglik.w.jump<-loglik.w.jump +log(dmvnorm(Y[,s],W.jump[j.w.jump,,]%*%Mu[(iter-1),j.w.jump,],W.jump[j.w.jump,,]%*%Sigma[(iter-1),j.w.jump,,]%*%t(W.jump[j.w.jump,,])))
-      prior.w.current<-prior.w.current+log(dwish(witer[j.w.current,,],n.dimensions,W0[j,,]))
-      prior.w.jump<-prior.w.jump+log(dwish(W.jump[j.w.jump,,],n.dimensions,W0[j,,]))
+      jump.w.sd<-as.vector(nearPD(W.jump[j.z.jump,,]%*%Sigma[(iter-1),j.z.current,,]%*%t(W.jump[j.z.current,,]))$mat)
+      jump.w.sd<-matrix(jump.w.sd,nrow=n.dimensions,ncol=n.dimensions)                  
+      loglik.w.current<-loglik.w.current+log(dmvnorm(Y[,s],witer[j.z.current,,]%*%Mu[(iter-1),j.z.current,],WW.c))
+      loglik.w.jump<-loglik.w.jump +log(dmvnorm(Y[,s],W.jump[j.z.current,,]%*%Mu[(iter-1),j.z.current,],jump.w.sd))
+      prior.w.current<-prior.w.current+log(dwish(witer[j.z.current,,],n.dimensions,W0[j,,]))
+      prior.w.jump<-prior.w.jump+log(dwish(W.jump[j.z.current,,],n.dimensions,W0[j,,]))
 
     }
     
