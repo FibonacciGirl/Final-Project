@@ -1,5 +1,6 @@
 #install.packages("mvtnorm")
 #install.packages("MCMCpack")
+#instal.packages("tmvtnorm")
 library(mvtnorm)
 library(MCMCpack)
 library(coda)
@@ -43,12 +44,34 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha){
   n<-dim(Y)[2]
   n.dimensions<-dim(Y)[1]
   
+  ##set initial values##
+  Z<-array(dim=c(nrun,n,n.categories))
+  theta<-array(dim=c(nrun,n.categories))
+  Mu<-array(dim=c(nrun,n.categories,n.dimensions))
+  Sigma<-array(dim=c(nrun,n.categories,n.dimensions,n.dimensions))
+  
+  for(s in 1:n){
+    Z[1,s,]<-rmultinom(1,1,rep(1/n.categories,n.categories))
+  }
+  theta[1,]<-rep(1/n.categories,n.categories)
+  for(j in 1:n.categories){
+    Mu[1,j,]<-rmvnorm(1,mu0[j,],Lambda0[j,,])
+    
+    Sigma.inv<-rWishart(1,n.dimensions,sigma0[j,,])
+    Sigma[1,j,,]<-solve(matrix(Sigma.inv,nrow=n.dimensions,ncol=n.dimensions))
+  }
+  
   
   ##MCMC setup##
-  nrun=10000
-  thin=
-    burn=
-
+  nrun =10000
+  burn = 5000
+  thin = 10
+  eff.sam = (nrun-burn)/thin
+  
+  Theta.out<-array(dim=c(eff.sam,n.categories))
+  Sigma.out<-array(dim=c(eff.sam,n.categories,n.dimensions,n.dimensions))
+  Mu.out<-array(dim=c(eff.sam,n.categories,n.dimensions))
+  Z.out<-array(dim=c(eff.sam,n,n.categories))
 
   ##begin sampler##
   for(iter in 2:nrun){
@@ -85,10 +108,10 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha){
     prob.jump<-sum(loglik.jump)+sum(prior.jump)
     prob.current<-sum(loglik.current)+sum(prior.current)
     
-    accept.prob<- min(1,exp(prob.jump)/exp(prob.current))
-    print(accept.prob)
+    accept.prob<- min(1,exp(prob.jump)/max(.00001,exp(prob.current)))
     
     accept<-rbinom(1,1,accept.prob)
+    
     if(accept == 1){
       Z[iter,,]<-Z.jump
     }
@@ -98,14 +121,16 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha){
 
     ##update theta##
     Z.sum<-numeric(n.categories)
+    alpha_n<-numeric(n.categories)
     
     for(j in 1:n.categories){
       Z.sum[j]<-sum(Z[iter,,j])
+      alpha_n[j]<-alpha[j] +Z.sum[j]
     }
+    theta[iter,]<-rdirichlet(1,alpha_n)
     
-    theta[iter,]<-theta[(iter-1),]+Z.sum
+    #print(theta[iter,])
     
-    print(theta[iter,])
     ##update mu##
     for(j in 1:n.categories){
       Lambdan<-solve(solve(Lambda0[j,,])+n*solve(Sigma[(iter-1),j,,]))
@@ -117,25 +142,35 @@ MCMC<-function(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha){
     
     ##update sigma##
     for(j in 1:n.categories){
-      nun<-nu0 + n
+      nun<-n.dimensions + n
       Sn<-sigma0[j,,]+(ybar[j,]-Mu[(iter-1),j,])%*%(t(ybar[j,]-Mu[(iter-1),j,]))
 
       sig.inv<-rWishart(1,nun,solve(Sn))
       Sigma[iter,j,,]<-solve(matrix(sig.inv,nrow=n.dimensions,ncol=n.dimensions))
     }
+  
+    ##burn and thin##
+    if(iter%%thin==0 && iter>burn){
+      sav=(iter-burn)/thin
+      Theta.out[sav,]<-theta[iter,]
+      Sigma.out[sav,,,]<-Sigma[iter,,,]
+      Mu.out[sav,,]<-Mu[iter,,]
+      Z.out[sav,,]<-Z[iter,,]
+    }
   }
-  
-  ##burn and thin##
-  
-  ##return##
+  #return(theta,Sigma, Mu,Z)
+  return(list(THETA=Theta.out,SIGMA=Sigma.out,MU=Mu.out,Z.OUT=Z.out))
 }
+  
+
+
+
 ##data##
 data<-read.csv('TD')
 category<-data$category
 data$category<-NULL
 n.categories<-length(unique(category))
-NOPE<-t(data.matrix(data))
-Y<-NOPE[,1:4]
+Y<-t(data.matrix(data))
 
 n.categories<-2
 n<-dim(Y)[2]
@@ -144,8 +179,9 @@ n.dimensions<-dim(Y)[1]
 ybar<-array(dim= c(n.categories,n.dimensions))
 
 for(j in 1:n.categories){
-  ybar[j,]<-mean(Y[,which(category[1:4]==j)])
+  ybar[j,]<-mean(Y[,which(category==j)])
 }
+
 
 #choose fixed hyper paratments#
 mu0<-array(dim=c(n.categories,n.dimensions))
@@ -165,25 +201,53 @@ for(j in 1:n.categories){
 alpha<-rep(1,n.categories)
 
 
-##set initial values##
-Z<-array(dim=c(nrun,n,n.categories))
-theta<-array(dim=c(nrun,n.categories))
-Mu<-array(dim=c(nrun,n.categories,n.dimensions))
-Sigma<-array(dim=c(nrun,n.categories,n.dimensions,n.dimensions))
-
-for(s in 1:n){
-  Z[1,s,]<-rmultinom(1,1,rep(1/n.categories,n.categories))
-}
-theta[1,]<-rep(1/n.categories,n.categories)
-for(j in 1:n.categories){
-  Mu[1,j,]<-rmvnorm(1,mu0[j,],Lambda0[j,,])
-
-  Sigma.inv<-rWishart(1,n.dimensions,sigma0[j,,])
-  Sigma[1,j,,]<-solve(matrix(Sigma.inv,nrow=n.dimensions,ncol=n.dimensions))
-}
 
 
 
-MCMC(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha)
-  
 
+test<- MCMC(Y,ybar,mu0,Lambda0,nu0,sigma0,alpha)
+
+##MCMC diagnostics
+mean(test)
+mean(test[,2])
+
+density(test)
+
+?density()
+plot(1:nrun,test[,1])
+plot(1:nrun,test[,2])
+
+theta.mcmc<-as.mcmc(test[[1]])
+sigma.mcmc<-as.mcmc(test[[2]])
+
+
+mu.mcmc<-as.mcmc(Mu)
+z.mcmc<-as.mcmc.list(test[[4]])
+
+as.mc
+theta.mcmc
+
+?mcmc.list()
+
+?mcmcUpgrade
+mu.mcmc<-as.mcmc.list(mu.mcmc)
+traceplot(theta.mcmc)
+traceplot(sigma.mcmc)
+traceplot(mu.mcmc)
+effectiveSize(theta.mcmc)
+effectiveSize(sigma.mcmc)
+effectiveSize(mu1.mcmc)
+effectiveSize(mu2.mcmc)
+effectiveSize(z.mcmc)
+mu<-test[[3]]
+mu1<-mu[,1,]
+mu2<-mu[,2,]
+
+mu1.mcmc<-as.mcmc(mu1)
+mu2.mcmc<-as.mcmc(mu2)
+traceplot(mu1.mcmc)
+traceplot(mu2.mcmc)
+mean(Y[1,which(category==2)])
+?ecdf
+?rWishart
+dWishart
